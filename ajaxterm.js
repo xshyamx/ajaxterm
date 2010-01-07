@@ -3,9 +3,10 @@ ajaxterm.Terminal_ctor=function(id,width,height) {
 	var ie=0;
 	if(window.ActiveXObject)
 		ie=1;
-	var sid=""+Math.round(Math.random()*1000000000);
-	var query0="s="+sid+"&w="+width+"&h="+height;
-	var query1=query0+"&c=1&k=";
+	var sid="s="+Math.round(Math.random()*1000000000);
+	// Initially query0 will be sid + initialization parameters, which are later stripped
+	var query0=sid+"&w="+width+"&h="+height;
+	var query1="&c=1&k=";
 	var buf="";
 	var timeout;
 	var error_timeout;
@@ -42,9 +43,9 @@ ajaxterm.Terminal_ctor=function(id,width,height) {
 	function do_color(event) {
 		var o=opt_color.className=(opt_color.className=='off')?'on':'off';
 		if(o=='on')
-			query1=query0+"&c=1&k=";
+			query1="&c=1&k=";
 		else
-			query1=query0+"&k=";
+			query1="&k=";
 		debug('Color '+opt_color.className);
 	}
 	function mozilla_clipboard() {
@@ -101,7 +102,7 @@ ajaxterm.Terminal_ctor=function(id,width,height) {
 			while(keybuf.length>0) {
 				send+=keybuf.pop();
 			}
-			var query=query1+send;
+			var query=query0+query1+send;
 			if(opt_get.className=='on') {
 				r.open("GET","u?"+query,true);
 				if(ie) {
@@ -131,6 +132,8 @@ ajaxterm.Terminal_ctor=function(id,width,height) {
 							if(rmax>2000)
 								rmax=2000;
 						}
+						// Once a send was successful, we only need to send sidas server shall remember other parameters 
+						query0=sid;
 						sending=0;
 						sled.className='off';
 						timeout=window.setTimeout(update,rmax);
