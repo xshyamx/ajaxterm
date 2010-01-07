@@ -1,4 +1,4 @@
-#!/usr/bin/python2.3
+#!/usr/bin/env python
 #
 # vim:set et ts=4 fdc=0 fdn=2 fdl=0:
 #
@@ -115,6 +115,12 @@ try:
     import cStringIO as StringIO
 except ImportError:
     import StringIO
+
+try:
+        import psyco
+        psyco.profile()
+except:
+        pass
 
 #----------------------------------------------------------
 # Qweb Xml t-raw t-esc t-if t-foreach t-set t-call t-trim

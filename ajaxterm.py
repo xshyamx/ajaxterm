@@ -2,6 +2,12 @@
 
 """ Ajaxterm """
 
+try:
+	import psyco
+	psyco.profile()
+except:
+	pass
+
 import array,cgi,fcntl,glob,mimetypes,optparse,os,pty,random,re,signal,select,sys,threading,time,termios,struct,pwd
 
 os.chdir(os.path.normpath(os.path.dirname(__file__)))
@@ -367,9 +373,10 @@ class SynchronizedMethod:
 		return r
 
 class Multiplex:
-	def __init__(self,cmd=None):
+	def __init__(self,cmd=None,serverport=None):
 		signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 		self.cmd=cmd
+		self.serverport=serverport
 		self.proc={}
 		self.lock=threading.RLock()
 		self.thread=threading.Thread(target=self.loop)
@@ -403,7 +410,10 @@ class Multiplex:
 					cmd+=['-oPreferredAuthentications=keyboard-interactive,password']
 					cmd+=['-oNoHostAuthenticationForLocalhost=yes']
 					cmd+=['-oLogLevel=FATAL']
-					cmd+=['-F/dev/null','-l',login,'localhost']
+					cmd+=['-F/dev/null']
+					if self.serverport:
+						cmd+=['-p %s'%self.serverport]
+					cmd+=['-l', login, 'localhost']
 				else:
 					os._exit(0)
 			env={}
@@ -415,7 +425,7 @@ class Multiplex:
 		else:
 			fcntl.fcntl(fd, fcntl.F_SETFL, os.O_NONBLOCK)
 			# python bug http://python.org/sf/1112949 on amd64
-			fcntl.ioctl(fd, struct.unpack('i',struct.pack('I',termios.TIOCSWINSZ))[0], struct.pack("HHHH",h,w,0,0))
+			fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH",h,w,0,0))
 			self.proc[fd]={'pid':pid,'term':Terminal(w,h),'buf':'','time':time.time()}
 			return fd
 	def die(self):
@@ -473,7 +483,7 @@ class Multiplex:
 				pass
 
 class AjaxTerm:
-	def __init__(self,cmd=None,index_file='ajaxterm.html'):
+	def __init__(self,cmd=None,index_file='ajaxterm.html',serverport=None):
 		self.files={}
 		for i in ['css','html','js']:
 			for j in glob.glob('*.%s'%i):
@@ -481,7 +491,7 @@ class AjaxTerm:
 		self.files['index']=file(index_file).read()
 		self.mime = mimetypes.types_map.copy()
 		self.mime['.html']= 'text/html; charset=UTF-8'
-		self.multi = Multiplex(cmd)
+		self.multi = Multiplex(cmd,serverport)
 		self.session = {}
 	def __call__(self, environ, start_response):
 		req = qweb.QWebRequest(environ, start_response,session=None)
@@ -528,6 +538,7 @@ def main():
 	parser.add_option("-P", "--pidfile",dest="pidfile",default="/var/run/ajaxterm.pid",help="set the pidfile (default: /var/run/ajaxterm.pid)")
 	parser.add_option("-i", "--index", dest="index_file", default="ajaxterm.html",help="default index file (default: ajaxterm.html)")
 	parser.add_option("-u", "--uid", dest="uid", help="Set the daemon's user id")
+	parser.add_option("-s", "--serverport", dest="serverport", help="Use a different port than 22 to connect to the ssh server")
 	(o, a) = parser.parse_args()
 	if o.daemon:
 		pid=os.fork()
@@ -553,7 +564,7 @@ def main():
 			sys.exit(0)
 	else:
 		print 'AjaxTerm at http://localhost:%s/' % o.port
-	at=AjaxTerm(o.cmd,o.index_file)
+	at=AjaxTerm(o.cmd,o.index_file,o.serverport)
 #	f=lambda:os.system('firefox http://localhost:%s/&'%o.port)
 #	qweb.qweb_wsgi_autorun(at,ip='localhost',port=int(o.port),threaded=0,log=o.log,callback_ready=None)
 	try:
