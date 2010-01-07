@@ -493,6 +493,9 @@ class AjaxTerm:
 		self.mime['.html']= 'text/html; charset=UTF-8'
 		self.multi = Multiplex(cmd,serverport)
 		self.session = {}
+	def sanitize(self, input):
+		return re.sub('[^a-zA-Z0-9.-]','', input)
+
 	def __call__(self, environ, start_response):
 		req = qweb.QWebRequest(environ, start_response,session=None)
 		if req.PATH_INFO.endswith('/u'):
@@ -526,7 +529,14 @@ class AjaxTerm:
 				req.write(self.files[n])
 			else:
 				req.response_headers['Content-Type'] = 'text/html; charset=UTF-8'
-				req.write(self.files['index'])
+
+				index = self.files['index']
+				vars = {}
+				vars['hostname'] = self.sanitize(req.REQUEST['hostname'])
+				vars['port'] = self.sanitize(req.REQUEST['port'])
+				for key in vars:
+					index = index.replace('$' + key, vars[key])
+				req.write(index)
 		return req
 
 def main():
