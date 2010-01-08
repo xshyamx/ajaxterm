@@ -386,7 +386,7 @@ class Multiplex:
 			orig=getattr(self,name)
 			setattr(self,name,SynchronizedMethod(self.lock,orig))
 		self.thread.start()
-	def create(self,w=80,h=25):
+	def create(self,w=80,h=25,hostname=None,port=None):
 		pid,fd=pty.fork()
 		if pid==0:
 			try:
@@ -411,9 +411,15 @@ class Multiplex:
 					cmd+=['-oNoHostAuthenticationForLocalhost=yes']
 					cmd+=['-oLogLevel=FATAL']
 					cmd+=['-F/dev/null']
-					if self.serverport:
-						cmd+=['-p %s'%self.serverport]
-					cmd+=['-l', login, 'localhost']
+
+					if port == None:
+						port = self.serverport
+					if port != None:
+						cmd+=['-p', str(port)]
+
+					if hostname == None:
+						hostname = 'localhost'
+					cmd+=['-l', login, hostname]
 				else:
 					os._exit(0)
 			env={}
@@ -509,7 +515,15 @@ class AjaxTerm:
 			else:
 				if not (w>2 and w<256 and h>2 and h<100):
 					w,h=80,25
-				term=self.session[s]=self.multi.create(w,h)
+				if 'hostname' in req.REQUEST:
+					hostname = self.sanitize(req.REQUEST['hostname'])
+				else:
+					hostname = None
+				if 'port' in req.REQUEST:
+					port = self.sanitize(req.REQUEST['port'])
+				else:
+					port = None
+				term=self.session[s]=self.multi.create(w,h,hostname,port)
 			if k:
 				self.multi.proc_write(term,k)
 			time.sleep(0.002)

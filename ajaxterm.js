@@ -1,11 +1,13 @@
 ajaxterm={};
-ajaxterm.Terminal_ctor=function(id,width,height) {
+ajaxterm.Terminal_ctor=function(id,width,height,hostname,port) {
 	var ie=0;
 	if(window.ActiveXObject)
 		ie=1;
 	var sid="s="+Math.round(Math.random()*1000000000);
 	// Initially query0 will be sid + initialization parameters, which are later stripped
 	var query0=sid+"&w="+width+"&h="+height;
+	if (hostname) query0 += "&hostname="+hostname;
+	if (port) query0 += "&port="+port;
 	var query1="&c=1&k=";
 	var buf="";
 	var timeout;
@@ -276,7 +278,7 @@ ajaxterm.Terminal_ctor=function(id,width,height) {
 	}
 	init();
 }
-ajaxterm.Terminal=function(id,width,height) {
-	return new this.Terminal_ctor(id,width,height);
+ajaxterm.Terminal=function(id,width,height,hostname,port) {
+	return new this.Terminal_ctor(id,width,height,hostname,port);
 }
 
