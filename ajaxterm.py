@@ -16,6 +16,9 @@ sys.path[0:0]=glob.glob('../../python')
 
 import qweb
 
+def SanitizeInput(input):
+	return re.sub('[^a-zA-Z0-9.-]','', input)
+
 class Terminal:
 	def __init__(self,width=80,height=24):
 		self.width=width
@@ -403,6 +406,14 @@ class Multiplex:
 			elif os.getuid()==0:
 				cmd=['/bin/login']
 			else:
+				if not hostname:
+					sys.stdout.write("Hostname [localhost]: ")
+					hostname=SanitizeInput(sys.stdin.readline().strip())
+
+				if not port:
+					sys.stdout.write("Port [%s]: " % (self.serverport,))
+					port=SanitizeInput(sys.stdin.readline().strip())
+				
 				sys.stdout.write("Login: ")
 				login=sys.stdin.readline().strip()
 				if re.match('^[0-9A-Za-z-_. ]+$',login):
@@ -412,12 +423,12 @@ class Multiplex:
 					cmd+=['-oLogLevel=FATAL']
 					cmd+=['-F/dev/null']
 
-					if port == None:
+					if not port:
 						port = self.serverport
-					if port != None:
+					if port:
 						cmd+=['-p', str(port)]
 
-					if hostname == None:
+					if not hostname:
 						hostname = 'localhost'
 					cmd+=['-l', login, hostname]
 				else:
@@ -499,8 +510,6 @@ class AjaxTerm:
 		self.mime['.html']= 'text/html; charset=UTF-8'
 		self.multi = Multiplex(cmd,serverport)
 		self.session = {}
-	def sanitize(self, input):
-		return re.sub('[^a-zA-Z0-9.-]','', input)
 
 	def __call__(self, environ, start_response):
 		req = qweb.QWebRequest(environ, start_response,session=None)
@@ -516,11 +525,11 @@ class AjaxTerm:
 				if not (w>2 and w<256 and h>2 and h<100):
 					w,h=80,25
 				if 'hostname' in req.REQUEST:
-					hostname = self.sanitize(req.REQUEST['hostname'])
+					hostname = SanitizeInput(req.REQUEST['hostname'])
 				else:
 					hostname = None
 				if 'port' in req.REQUEST:
-					port = self.sanitize(req.REQUEST['port'])
+					port = SanitizeInput(req.REQUEST['port'])
 				else:
 					port = None
 				term=self.session[s]=self.multi.create(w,h,hostname,port)
@@ -546,8 +555,8 @@ class AjaxTerm:
 
 				index = self.files['index']
 				vars = {}
-				vars['hostname'] = self.sanitize(req.REQUEST['hostname'])
-				vars['port'] = self.sanitize(req.REQUEST['port'])
+				vars['hostname'] = SanitizeInput(req.REQUEST['hostname'])
+				vars['port'] = SanitizeInput(req.REQUEST['port'])
 				for key in vars:
 					index = index.replace('$' + key, vars[key])
 				req.write(index)
