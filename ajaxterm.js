@@ -1,183 +1,244 @@
-ajaxterm={};
-ajaxterm.Terminal_ctor=function(id,width,height,hostname,port) {
-	var ie=0;
-	if(window.ActiveXObject)
-		ie=1;
-	var sid="s="+Math.round(Math.random()*1000000000);
-	// Initially query0 will be sid + initialization parameters, which are later stripped
-	var query0=sid+"&w="+width+"&h="+height;
-	if (hostname) query0 += "&hostname="+hostname;
-	if (port) query0 += "&port="+port;
-	var query1="&c=1&k=";
-	var buf="";
-	var timeout;
-	var error_timeout;
-	var keybuf=[];
-	var sending=0;
-	var rmax=1;
+function jqTermTransporter(observer, params) {
+	this.buf = "";
+	this.timeout = null;
+	this.error_timeout = null;
+	this.sending = 0;
+	this.rmax = 1;
+	this.keybuf = [];
+	this.observer = observer;
+	this.dest_url = params.url;
+	this.width = params.width;
+	this.height = params.height;
+	this.accepted = false;
 
-	var div=document.getElementById(id);
-	var dstat=document.createElement('pre');
-	var sled=document.createElement('span');
-	var opt_get=document.createElement('a');
-	var opt_color=document.createElement('a');
-	var opt_paste=document.createElement('a');
-	var sdebug=document.createElement('span');
-	var dterm=document.createElement('div');
+	this.init();
+	this.params = {
+		'sid' : {
+			'set' : true,
+			'key' : 's',
+			'val' : params.sid
+		},
+		'colour' : {
+			'set' : true,
+			'key' : 'c',
+			'val' : 1
+		}
+	};
+}
 
-	function debug(s) {
-		sdebug.innerHTML=s;
-	}
-	function error() {
-		sled.className='off';
-		debug("Connection lost timeout ts:"+((new Date).getTime()));
-	}
-	function opt_add(opt,name) {
-		opt.className='off';
-		opt.innerHTML=' '+name+' ';
-		dstat.appendChild(opt);
-		dstat.appendChild(document.createTextNode(' '));
-	}
-	function do_get(event) {
-		opt_get.className=(opt_get.className=='off')?'on':'off';
-		debug('GET '+opt_get.className);
-	}
-	function do_color(event) {
-		var o=opt_color.className=(opt_color.className=='off')?'on':'off';
-		if(o=='on')
-			query1="&c=1&k=";
-		else
-			query1="&k=";
-		debug('Color '+opt_color.className);
-	}
-	function mozilla_clipboard() {
-		 // mozilla sucks
-		try {
-			netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
-		} catch (err) {
-			debug('Access denied, <a href="http://kb.mozillazine.org/Granting_JavaScript_access_to_the_clipboard" target="_blank">more info</a>');
-			return undefined;
+jqTermTransporter.prototype = {
+	init: function() {
+		var thisObj = this;
+		this.timeout = setTimeout(function() { thisObj.update();}, 100);
+	},
+	setUrl: function(url) {
+		this.dest_url = url;
+	},
+	setColour: function(isOn) {
+		this.params.colour['set'] = isOn;
+	},
+	queue: function(s) {
+		var thisObj = this;
+//		console.log("adding: " + s);
+		this.keybuf.unshift(s);
+		if(this.sending == 0) {
+			clearTimeout(this.timeout);
+			this.timeout = setTimeout(function() { thisObj.update();}, 2);
 		}
-		var clip = Components.classes["@mozilla.org/widget/clipboard;1"].createInstance(Components.interfaces.nsIClipboard);
-		var trans = Components.classes["@mozilla.org/widget/transferable;1"].createInstance(Components.interfaces.nsITransferable);
-		if (!clip || !trans) {
-			return undefined;
-		}
-		trans.addDataFlavor("text/unicode");
-		clip.getData(trans,clip.kGlobalClipboard);
-		var str=new Object();
-		var strLength=new Object();
-		try {
-			trans.getTransferData("text/unicode",str,strLength);
-		} catch(err) {
-			return "";
-		}
-		if (str) {
-			str=str.value.QueryInterface(Components.interfaces.nsISupportsString);
-		}
-		if (str) {
-			return str.data.substring(0,strLength.value / 2);
-		} else {
-			return "";
+	},
+	update: function() {
+		if(this.sending == 0) {
+			var thisObj = this;
+			this.sending = 1;
+			this.observer.trigger('jqtt.sending', 'on');
+
+			var keydata = "";
+			while(this.keybuf.length>0) {
+				keydata += this.keybuf.pop();
+			}
+
+			var data = {};
+			for(i in this.params) {
+				var item = this.params[i];
+				if(item.set) {
+					data[item.key] = item.val;
+				}
+			}
+			if(!this.accepted) {
+				data['w'] = this.width;
+				data['h'] = this.height;
+			}
+			data['k'] = keydata;
+
+			$.ajax({
+				url: this.dest_url,
+				data: data,
+				success: function(data, textStatus, xhr) {
+					clearTimeout(thisObj.error_timeout);
+
+					thisObj.accepted = true;
+					if(xhr.responseXML.documentElement.tagName == "pre") {
+						thisObj.observer.trigger('jqtt.sendSuccess', xhr.responseText);
+						thisObj.rmax=100;
+					} else {
+						thisObj.rmax*=2;
+						if(thisObj.rmax > 2000) {
+							thisObj.rmax = 2000;
+						}
+					}
+					thisObj.sending = 0;
+					thisObj.timeout = setTimeout(function() { thisObj.update(); }, thisObj.rmax);
+				},
+				errors: function(req) {
+					thisObj.observer.trigger('jqtt.debug', "Connection error status:" + req.status);
+				}
+			});
+			thisObj.error_timeout = setTimeout(function() { thisObj.observer.trigger('jqtt.error', {}); }, 5000);
 		}
 	}
-	function do_paste(event) {
+}
+
+function jqTerm(container_id, url, params) {
+	this.sid = Math.round(Math.random()*10000000000);
+	if(!params) {
+		params = []
+	}
+	var width = params['width'] ? params['width'] : 80;
+	var height = params['height'] ? params['height'] : 25;
+
+	this.base_url = url;
+
+	this.term_container = $('#' + container_id);
+	if(!this.term_container) {
+		console.log("Unknown terminal container: " + container_id);
+		return false;
+	}
+	this.dstat = $('<pre></pre>');
+	this.sled = $('<span></span>');
+	this.opt_color = $('<a></a>');
+	this.sdebug = $('<span></span>');
+	this.dterm = $('<div></div>');
+
+	this.transporter = new jqTermTransporter(this.term_container, {'sid':this.sid, 'url':this.base_url, 'width':width, 'height':height});
+	this.init();
+}
+
+jqTerm.prototype = {
+	init: function() {
+		this.sled.append(document.createTextNode('\xb7'));
+		this.sledStatus('off');
+
+		this.dstat.append(this.sled);
+		this.dstat.append(document.createTextNode(' '));
+
+		this.opt_add(this.opt_color,'Colors');
+		this.opt_color.attr('class', 'on');
+
+		this.dstat.append(this.sdebug);
+		this.dstat.attr('class', 'stat');
+
+		this.term_container.append(this.dstat);
+		this.term_container.append(this.dterm);
+
+		var thisObj = this;
+		this.opt_color.click(function() { thisObj.do_color(); });
+//		$(document).bind('paste', function(e) { thisObj.do_paste(); });
+
+		$(document).bind('keydown', function(e) { return thisObj.keydown(e); });
+		$(document).bind('keypress', function(e) { return thisObj.keypress(e); });
+		this.term_container.bind('jqtt.sending', function(el, class_name) { return thisObj.sending(class_name); });
+		this.term_container.bind('jqtt.sendSuccess', function(el, sid) { return thisObj.sendSuccess(sid); });
+		this.term_container.bind('jqtt.debug', function(el, msg) { return thisObj.debug(msg); });
+		this.term_container.bind('jqtt.error', function(el) { return thisObj.error(); });
+	},
+	opt_add: function(opt,name) {
+		opt.attr('class', 'off');
+		opt.html(' ' + name + ' ');
+		this.dstat.append(opt);
+		this.dstat.append(document.createTextNode(' '));
+	},
+	debug: function(s) {
+		this.sdebug.html(s);
+	},
+	error: function() {
+		this.sledStatus('off');
+		this.debug("Connection lost timeout ts:"+((new Date).getTime()));
+	},
+	do_color: function() {
+		var o = this.opt_color.attr('class') == 'off' ? 'on' : 'off';
+		this.opt_color.attr('class', o);
+		this.transporter.setColour(o == 'on');
+		this.debug('Color ' + this.opt_color.attr('class'));
+	},
+	do_paste: function() {
+/*
 		var p=undefined;
 		if (window.clipboardData) {
-			p=window.clipboardData.getData("Text");
+			p = window.clipboardData.getData("Text");
 		} else if(window.netscape) {
-			p=mozilla_clipboard();
+			p = this.mozilla_clipboard();
 		}
 		if (p) {
-			debug('Pasted');
-			queue(encodeURIComponent(p));
-		} else {
+			this.debug('Pasted');
+			this.transporter.queue(encodeURIComponent(p));
 		}
-	}
-	function update() {
-//		debug("ts: "+((new Date).getTime())+" rmax:"+rmax);
-		if(sending==0) {
-			sending=1;
-			sled.className='on';
-			var r=new XMLHttpRequest();
-			var send="";
-			while(keybuf.length>0) {
-				send+=keybuf.pop();
-			}
-			var query=query0+query1+send;
-			if(opt_get.className=='on') {
-				r.open("GET","u?"+query,true);
-				if(ie) {
-					r.setRequestHeader("If-Modified-Since", "Sat, 1 Jan 2000 00:00:00 GMT");
-				}
-			} else {
-				r.open("POST","u",true);
-			}
-			r.setRequestHeader('Content-Type','application/x-www-form-urlencoded');
-			r.onreadystatechange = function () {
-//				debug("xhr:"+((new Date).getTime())+" state:"+r.readyState+" status:"+r.status+" statusText:"+r.statusText);
-				if (r.readyState==4) {
-					if(r.status==200) {
-						window.clearTimeout(error_timeout);
-						de=r.responseXML.documentElement;
-						if(de.tagName=="pre") {
-							if(ie) {
-								Sarissa.updateContentFromNode(de, dterm);
-							} else {
-								Sarissa.updateContentFromNode(de, dterm);
-//								old=div.firstChild;
-//								div.replaceChild(de,old);
-							}
-							rmax=100;
-						} else {
-							rmax*=2;
-							if(rmax>2000)
-								rmax=2000;
-						}
-						// Once a send was successful, we only need to send sidas server shall remember other parameters 
-						query0=sid;
-						sending=0;
-						sled.className='off';
-						timeout=window.setTimeout(update,rmax);
-					} else {
-						debug("Connection error status:"+r.status);
-					}
-				}
-			}
-			error_timeout=window.setTimeout(error,5000);
-			if(opt_get.className=='on') {
-				r.send(null);
-			} else {
-				r.send(query);
+*/
+		this.debug('Pasted');
+	},
+	//this is for handling special, non text keys
+	keydown: function(e) {
+		var kc = (e.keyCode ? e.keyCode : e.which);
+		var k = '';
+
+		if (kc==9) k=String.fromCharCode(9);  // Tab
+		else if (kc==8) k=String.fromCharCode(127);  // Backspace
+		else if (kc==27) k=String.fromCharCode(27); // Escape
+		else {
+			if (kc==33) k="[5~";        // PgUp
+			else if (kc==34) k="[6~";   // PgDn
+			else if (kc==35) k="[4~";   // End
+			else if (kc==36) k="[1~";   // Home
+			else if (kc==37) k="[D";    // Left
+			else if (kc==38) k="[A";    // Up
+			else if (kc==39) k="[C";    // Right
+			else if (kc==40) k="[B";    // Down
+			else if (kc==45) k="[2~";   // Ins
+			else if (kc==46) k="[3~";   // Del
+			else if (kc==112) k="[[A";  // F1
+			else if (kc==113) k="[[B";  // F2
+			else if (kc==114) k="[[C";  // F3
+			else if (kc==115) k="[[D";  // F4
+			else if (kc==116) k="[[E";  // F5
+			else if (kc==117) k="[17~"; // F6
+			else if (kc==118) k="[18~"; // F7
+			else if (kc==119) k="[19~"; // F8
+			else if (kc==120) k="[20~"; // F9
+			else if (kc==121) k="[21~"; // F10
+			else if (kc==122) k="[23~"; // F11
+			else if (kc==123) k="[24~"; // F12
+			if (k.length) {
+				k = String.fromCharCode(27)+k;
 			}
 		}
-	}
-	function queue(s) {
-		keybuf.unshift(s);
-		if(sending==0) {
-			window.clearTimeout(timeout);
-			timeout=window.setTimeout(update,1);
+		if(k.length) {
+			e.preventDefault();
+			this.transporter.queue(k);
+			return false;
 		}
-	}
-	function keypress(ev) {
-		if (!ev) var ev=window.event;
-//		s="kp keyCode="+ev.keyCode+" which="+ev.which+" shiftKey="+ev.shiftKey+" ctrlKey="+ev.ctrlKey+" altKey="+ev.altKey;
-//		debug(s);
-//		return false;
-//		else { if (!ev.ctrlKey || ev.keyCode==17) { return; }
-		var kc;
-		var k="";
-		if (ev.keyCode)
-			kc=ev.keyCode;
-		if (ev.which)
-			kc=ev.which;
-		if (ev.altKey) {
-			if (kc>=65 && kc<=90)
-				kc+=32;
-			if (kc>=97 && kc<=122) {
-				k=String.fromCharCode(27)+String.fromCharCode(kc);
+	},
+	keypress: function(e) {
+		var kc = (e.keyCode ? e.keyCode : e.which);
+		var k = '';
+
+		if (e.altKey) {
+//console.log("alt");
+			if (kc >= 65 && kc <= 90)
+				kc += 32;
+			if (kc >= 97 && kc <= 122) {
+				k = String.fromCharCode(27) + String.fromCharCode(kc);
 			}
-		} else if (ev.ctrlKey) {
+		} else if (e.ctrlKey) {
+//console.log("ctrl");
 			if (kc>=65 && kc<=90) k=String.fromCharCode(kc-64); // Ctrl-A..Z
 			else if (kc>=97 && kc<=122) k=String.fromCharCode(kc-96); // Ctrl-A..Z
 			else if (kc==54)  k=String.fromCharCode(30); // Ctrl-^
@@ -187,98 +248,30 @@ ajaxterm.Terminal_ctor=function(id,width,height,hostname,port) {
 			else if (kc==221) k=String.fromCharCode(29); // Ctrl-]
 			else if (kc==219) k=String.fromCharCode(29); // Ctrl-]
 			else if (kc==219) k=String.fromCharCode(0);  // Ctrl-@
-		} else if (ev.which==0) {
-			if (kc==9) k=String.fromCharCode(9);  // Tab
-			else if (kc==8) k=String.fromCharCode(127);  // Backspace
-			else if (kc==27) k=String.fromCharCode(27); // Escape
-			else {
-				if (kc==33) k="[5~";        // PgUp
-				else if (kc==34) k="[6~";   // PgDn
-				else if (kc==35) k="[4~";   // End
-				else if (kc==36) k="[1~";   // Home
-				else if (kc==37) k="[D";    // Left
-				else if (kc==38) k="[A";    // Up
-				else if (kc==39) k="[C";    // Right
-				else if (kc==40) k="[B";    // Down
-				else if (kc==45) k="[2~";   // Ins
-				else if (kc==46) k="[3~";   // Del
-				else if (kc==112) k="[[A";  // F1
-				else if (kc==113) k="[[B";  // F2
-				else if (kc==114) k="[[C";  // F3
-				else if (kc==115) k="[[D";  // F4
-				else if (kc==116) k="[[E";  // F5
-				else if (kc==117) k="[17~"; // F6
-				else if (kc==118) k="[18~"; // F7
-				else if (kc==119) k="[19~"; // F8
-				else if (kc==120) k="[20~"; // F9
-				else if (kc==121) k="[21~"; // F10
-				else if (kc==122) k="[23~"; // F11
-				else if (kc==123) k="[24~"; // F12
-				if (k.length) {
-					k=String.fromCharCode(27)+k;
-				}
-			}
 		} else {
 			if (kc==8)
-				k=String.fromCharCode(127);  // Backspace
-			else
-				k=String.fromCharCode(kc);
-		}
-		if(k.length) {
-//			queue(encodeURIComponent(k));
-			if(k=="+") {
-				queue("%2B");
-			} else {
-				queue(escape(k));
+				k = String.fromCharCode(127);  // Backspace
+			else {
+				k = String.fromCharCode(kc);
 			}
 		}
-		ev.cancelBubble=true;
-		if (ev.stopPropagation) ev.stopPropagation();
-		if (ev.preventDefault)  ev.preventDefault();
-		return false;
-	}
-	function keydown(ev) {
-		if (!ev) var ev=window.event;
-		if (ie) {
-//			s="kd keyCode="+ev.keyCode+" which="+ev.which+" shiftKey="+ev.shiftKey+" ctrlKey="+ev.ctrlKey+" altKey="+ev.altKey;
-//			debug(s);
-			o={9:1,8:1,27:1,33:1,34:1,35:1,36:1,37:1,38:1,39:1,40:1,45:1,46:1,112:1,
-			113:1,114:1,115:1,116:1,117:1,118:1,119:1,120:1,121:1,122:1,123:1};
-			if (o[ev.keyCode] || ev.ctrlKey || ev.altKey) {
-				ev.which=0;
-				return keypress(ev);
-			}
-		}
-	}
-	function init() {
-		sled.appendChild(document.createTextNode('\xb7'));
-		sled.className='off';
-		dstat.appendChild(sled);
-		dstat.appendChild(document.createTextNode(' '));
-		opt_add(opt_color,'Colors');
-		opt_color.className='on';
-		opt_add(opt_get,'GET');
-		opt_add(opt_paste,'Paste');
-		dstat.appendChild(sdebug);
-		dstat.className='stat';
-		div.appendChild(dstat);
-		div.appendChild(dterm);
-		if(opt_color.addEventListener) {
-			opt_get.addEventListener('click',do_get,true);
-			opt_color.addEventListener('click',do_color,true);
-			opt_paste.addEventListener('click',do_paste,true);
-		} else {
-			opt_get.attachEvent("onclick", do_get);
-			opt_color.attachEvent("onclick", do_color);
-			opt_paste.attachEvent("onclick", do_paste);
-		}
-		document.onkeypress=keypress;
-		document.onkeydown=keydown;
-		timeout=window.setTimeout(update,100);
-	}
-	init();
-}
-ajaxterm.Terminal=function(id,width,height,hostname,port) {
-	return new this.Terminal_ctor(id,width,height,hostname,port);
-}
 
+		if(k.length) {
+			e.preventDefault();
+			this.transporter.queue(k);
+		}
+		return false;
+	},
+	sledStatus: function(class_name) {
+		this.sled.attr('class', class_name);
+	},
+
+//triggered by transporter
+	sending: function(class_name) {
+		return this.sledStatus(class_name);
+	},
+	sendSuccess: function(content) {
+		this.dterm.html(content);
+		return this.sledStatus('off');
+	}
+}

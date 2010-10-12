@@ -20,7 +20,7 @@ def SanitizeInput(input):
 	return re.sub('[^a-zA-Z0-9.-]','', input)
 
 class Terminal:
-	def __init__(self,width=80,height=24):
+	def __init__(self,width=80,height=44):
 		self.width=width
 		self.height=height
 		self.init()
@@ -389,7 +389,7 @@ class Multiplex:
 			orig=getattr(self,name)
 			setattr(self,name,SynchronizedMethod(self.lock,orig))
 		self.thread.start()
-	def create(self,w=80,h=25,hostname=None,port=None):
+	def create(self,w=80,h=25,hostname=None,port=22):
 		pid,fd=pty.fork()
 		if pid==0:
 			try:
