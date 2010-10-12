@@ -17,3 +17,6 @@ Anything else?
 
 jQTerm is for developers, not for end users. It will require some integration with your website's interface
 
+You should *not* be accessing http://localhost:8022 directly
+You should note that there should be a middle layer here, on the server the JS connects to, that interprets the requests and tunnels the request to localhost:8022 (which is the jqterm process)
+
