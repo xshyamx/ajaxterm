@@ -2,6 +2,7 @@ function jqTermTransporter(observer, params) {
 	this.buf = "";
 	this.timeout = null;
 	this.error_timeout = null;
+	this.error_timeout_max = 10000;
 	this.sending = 0;
 	this.rmax = 1;
 	this.keybuf = [];
@@ -93,7 +94,7 @@ jqTermTransporter.prototype = {
 					thisObj.observer.trigger('jqtt.debug', "Connection error status:" + req.status);
 				}
 			});
-			thisObj.error_timeout = setTimeout(function() { thisObj.observer.trigger('jqtt.error', {}); }, 5000);
+			thisObj.error_timeout = setTimeout(function() { thisObj.observer.trigger('jqtt.error', {}); }, thisObj.error_timeout_max);
 		}
 	}
 }
