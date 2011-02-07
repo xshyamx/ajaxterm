@@ -564,6 +564,7 @@ class AjaxTerm:
 
 def main():
 	parser = optparse.OptionParser()
+	parser.add_option("-n", "--hostname", dest="ip", default="localhost", help="Set the hostname on which to listen for connections")
 	parser.add_option("-p", "--port", dest="port", default="8022", help="Set the TCP port (default: 8022)")
 	parser.add_option("-c", "--command", dest="cmd", default=None,help="set the command (default: /bin/login or ssh localhost)")
 	parser.add_option("-l", "--log", action="store_true", dest="log",default=0,help="log requests to stderr (default: quiet mode)")
@@ -593,15 +594,15 @@ def main():
 				file(o.pidfile,'w+').write(str(pid)+'\n')
 			except:
 				pass
-			print 'AjaxTerm at http://localhost:%s/ pid: %d' % (o.port,pid)
+                        print 'AjaxTerm at http://%s:%s/ pid: %d' % (o.ip, o.port,pid)
 			sys.exit(0)
 	else:
-		print 'AjaxTerm at http://localhost:%s/' % o.port
+                print 'AjaxTerm at http://%s:%s/' % (o.ip, o.port)
 	at=AjaxTerm(o.cmd,o.index_file,o.serverport)
 #	f=lambda:os.system('firefox http://localhost:%s/&'%o.port)
 #	qweb.qweb_wsgi_autorun(at,ip='localhost',port=int(o.port),threaded=0,log=o.log,callback_ready=None)
 	try:
-		qweb.QWebWSGIServer(at,ip='localhost',port=int(o.port),threaded=0,log=o.log).serve_forever()
+		qweb.QWebWSGIServer(at,ip=o.ip,port=int(o.port),threaded=0,log=o.log).serve_forever()
 	except KeyboardInterrupt,e:
 		sys.excepthook(*sys.exc_info())
 	at.multi.die()
