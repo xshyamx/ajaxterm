@@ -20,7 +20,7 @@ def SanitizeInput(input):
 	return re.sub('[^a-zA-Z0-9.-]','', input)
 
 class Terminal:
-	def __init__(self,width=80,height=24):
+	def __init__(self,width=80,height=44):
 		self.width=width
 		self.height=height
 		self.init()
@@ -389,7 +389,7 @@ class Multiplex:
 			orig=getattr(self,name)
 			setattr(self,name,SynchronizedMethod(self.lock,orig))
 		self.thread.start()
-	def create(self,w=80,h=25,hostname=None,port=None):
+	def create(self,w=80,h=25,hostname=None,port=22):
 		pid,fd=pty.fork()
 		if pid==0:
 			try:
@@ -500,7 +500,7 @@ class Multiplex:
 				pass
 
 class AjaxTerm:
-	def __init__(self,cmd=None,index_file='ajaxterm.html',serverport=None):
+	def __init__(self,cmd=None,index_file='jqterm.html',serverport=None):
 		self.files={}
 		for i in ['css','html','js']:
 			for j in glob.glob('*.%s'%i):
@@ -569,8 +569,8 @@ def main():
 	parser.add_option("-c", "--command", dest="cmd", default=None,help="set the command (default: /bin/login or ssh localhost)")
 	parser.add_option("-l", "--log", action="store_true", dest="log",default=0,help="log requests to stderr (default: quiet mode)")
 	parser.add_option("-d", "--daemon", action="store_true", dest="daemon", default=0, help="run as daemon in the background")
-	parser.add_option("-P", "--pidfile",dest="pidfile",default="/var/run/ajaxterm.pid",help="set the pidfile (default: /var/run/ajaxterm.pid)")
-	parser.add_option("-i", "--index", dest="index_file", default="ajaxterm.html",help="default index file (default: ajaxterm.html)")
+	parser.add_option("-P", "--pidfile",dest="pidfile",default="/var/run/jqterm.pid",help="set the pidfile (default: /var/run/jqterm.pid)")
+	parser.add_option("-i", "--index", dest="index_file", default="jqterm.html",help="default index file (default: jqterm.html)")
 	parser.add_option("-u", "--uid", dest="uid", help="Set the daemon's user id")
 	parser.add_option("-s", "--serverport", dest="serverport", help="Use a different port than 22 to connect to the ssh server")
 	(o, a) = parser.parse_args()
