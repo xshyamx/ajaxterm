@@ -34,7 +34,7 @@ Then point your browser to this URL : http://localhost:8022/
 
 ## Screenshot ##
 
-![ajaxterm screenshot](http://antony.lesuisse.org/software/ajaxterm/scr.png)
+![ajaxterm screenshot](https://raw.githubusercontent.com/xshyamx/ajaxterm/master/scr.png)
 
 ## Documentation and Caveats ##
 
